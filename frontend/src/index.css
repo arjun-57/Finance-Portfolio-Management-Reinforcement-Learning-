@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ────────────────────────────────────────────────────────────────── */
+:root {
+  --brand:        #6366f1;
+  --brand-light:  #818cf8;
+  --surface-900:  #0a0a14;
+  --surface-800:  #10101e;
+  --surface-700:  #161628;
+  --surface-600:  #1c1c34;
+  --glow-1: rgba(99, 102, 241, 0.25);
+  --glow-2: rgba(139, 92, 246, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background: var(--surface-900);
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #312e81; border-radius: 3px; }
+
+/* ─── Glass card ──────────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(22, 22, 40, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 16px;
+}
+
+.glass-sm {
+  background: rgba(22, 22, 40, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 12px;
+}
+
+/* ─── Glow button ────────────────────────────────────────────────────────── */
+.btn-glow {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  padding: 0.625rem 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.35);
+  letter-spacing: 0.01em;
+}
+.btn-glow:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 32px rgba(99, 102, 241, 0.55);
+}
+.btn-glow:active { transform: translateY(0); }
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+.btn-danger:hover { box-shadow: 0 0 32px rgba(239, 68, 68, 0.5); }
+
+/* ─── Chart colours (CSS vars consumed by Recharts) ─────────────────────── */
+.chart-agent   { color: #6366f1; }
+.chart-ew      { color: #10b981; }
+.chart-spy     { color: #f59e0b; }
+.chart-mkw     { color: #06b6d4; }
+.chart-mom     { color: #f97316; }
+
+/* ─── Metric delta badges ────────────────────────────────────────────────── */
+.badge-up   { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+.badge-down { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
+.badge-neutral { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+/* ─── Animated gradient background ──────────────────────────────────────── */
+.gradient-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 80%, rgba(139,92,246,0.12) 0%, transparent 50%),
+    var(--surface-900);
+}
+
+/* ─── Tab navigation ─────────────────────────────────────────────────────── */
+.tab-active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.15));
+  border-bottom: 2px solid #6366f1;
+  color: #a5b4fc;
+}
+
+/* ─── Table ──────────────────────────────────────────────────────────────── */
+.metrics-table th {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(99,102,241,0.15);
+}
+.metrics-table td {
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid rgba(30,30,60,0.6);
+  font-variant-numeric: tabular-nums;
+}
+.metrics-table tr:last-child td { border-bottom: none; }
+.metrics-table td.agent-row { color: #a5b4fc; font-weight: 600; }
+.metrics-table tr:hover td { background: rgba(99,102,241,0.05); transition: background 0.15s; }
+
+/* ─── Status indicator ──────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.blink { animation: blink 1.4s ease-in-out infinite; }
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+@keyframes slideUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.animate-fade-in  { animation: fadeIn  0.4s ease-out; }
+.animate-slide-up { animation: slideUp 0.45s ease-out; }
+
+/* ─── Recharts tooltip ───────────────────────────────────────────────────── */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: rgba(16, 16, 30, 0.95) !important;
+  border: 1px solid rgba(99,102,241,0.3) !important;
+  border-radius: 10px !important;
+  color: #e2e8f0 !important;
+  font-size: 0.8rem !important;
+}
