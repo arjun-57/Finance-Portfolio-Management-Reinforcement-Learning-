@@ -1,202 +1,169 @@
-# RL Portfolio Optimizer
-### PPO + Transformer Encoder · Indian & Global Markets · 2018–2024
+# Reinforcement Learning Portfolio Optimizer
+### Proximal Policy Optimization (PPO) with Transformer State Encoder (2018–2024)
 
-> A reinforcement learning portfolio management system using Proximal Policy Optimization (PPO) with a Transformer-based state encoder. Trained on 8 assets spanning Indian large-caps, gold, and US ETFs with a novel reward signal that includes transaction cost penalties.
-
----
-
-## 🏗️ Architecture
-
-```
-State (20-day window, 8 assets)
-    ↓
-TransformerEncoder (2 heads × 2 layers, d_model=64)
-    ├── Positional Encoding
-    ├── Self-attention → temporal dependencies
-    └── Mean-pool → context vector (64-dim)
-    
-         ↓ concat current weights (8-dim)
-    ┌──────────────┐
-    │ Actor Head   │ → Gaussian policy → Softmax → weights
-    │ Critic Head  │ → Value estimate
-    └──────────────┘
-         ↓
-PPO Update (clipped objective, GAE, entropy bonus)
-```
-
-### Why Transformer over MLP?
-The 20-day return matrix is inherently sequential. A Transformer's self-attention learns *which days mattered most* for each allocation decision — attention weights are interpretable and examinable. This is novel at course-project level.
-
-### Why PPO over DDPG?
-PPO's clipped surrogate objective prevents destructive policy updates — it's stable, reproducible, and used in production by OpenAI and DeepMind. DDPG is notoriously brittle in portfolio problems due to its off-policy nature and dependency on a perfect replay buffer.
+An autonomous quantitative asset allocation system employing Proximal Policy Optimization (PPO) coupled with a multi-head Transformer state encoder. Evaluated across an 8-asset universe spanning Indian large-caps (NSE), domestic Gold ETFs, and US index ETFs, featuring transaction-cost-penalized reward modeling.
 
 ---
 
-## 📦 Asset Universe
+## Architecture Overview
 
-| Ticker        | Name          | Category               |
-|---------------|---------------|------------------------|
-| RELIANCE.NS   | Reliance      | Indian Large-Cap Energy|
-| TCS.NS        | TCS           | Indian Large-Cap IT    |
-| HDFCBANK.NS   | HDFC Bank     | Indian Large-Cap Bank  |
-| INFY.NS       | Infosys       | Indian Mid-Large IT    |
-| GOLDBEES.NS   | GoldBees ETF  | Indian Nifty50 Proxy   |
-| AAPL          | Apple         | US Tech                |
-| SPY           | S&P 500 ETF   | US Market              |
-| GC=F          | Gold Futures  | Commodity Hedge        |
+```
+State Tensor: [Batch, 20-Day Lookback Window, 8 Assets]
+    │
+    ▼
+Transformer Encoder (2 Attention Heads, 2 Layers, d_model = 64)
+    ├── Learnable Positional Encoding
+    ├── Temporal Multi-Head Self-Attention
+    └── Mean Pooling Projection ──► Context Vector (64-dim)
+                                         │
+                                         ▼ (Concatenate current portfolio weights, 8-dim)
+                                 ┌──────────────┐
+                                 │ Latent State │ (72-dim)
+                                 └───────┬──────┘
+                                         │
+                     ┌───────────────────┴───────────────────┐
+                     ▼                                       ▼
+             Actor Head (Policy)                     Critic Head (Value)
+                     │                                       │
+     Gaussian Parameterization (Mean/Std)             Scalar Value Estimate V(s)
+                     │
+            Softmax Normalization
+                     │
+            Target Allocation (w_t)
+```
 
-**Time split:** Train 2018–2022 · Val 2023 · Test 2024
+### Architectural Rationale
+- **Transformer Encoder over MLP / GRU**: Historical return matrices exhibit non-Markovian temporal correlations. Self-attention weights dynamically reveal which historical market conditions (e.g., prior volatility spikes or macro shifts) exert the strongest influence on the current allocation decision.
+- **PPO over Off-Policy Methods (DDPG/SAC)**: PPO's clipped surrogate objective mitigates destabilizing policy updates common in financial environments, guaranteeing monotonic policy improvement across volatile market regimes without replay buffer stale-gradient issues.
 
 ---
 
-## 🧮 Reward Signal
+## Asset Universe and Data Split
 
-```
-R_t = log(V_t / V_{t-1}) − λ·σ_t − δ·TC_t
+The asset universe reflects a multi-currency, diversified portfolio:
 
-where:
-  σ_t  = rolling 5-day portfolio volatility   (λ = 0.1)
-  TC_t = 0.1% × L1 turnover                  (δ = 1.0)
-```
+| Ticker | Asset Name | Asset Class / Role |
+|---|---|---|
+| `RELIANCE.NS` | Reliance Industries | Indian Large-Cap Energy & Conglomerate |
+| `TCS.NS` | Tata Consultancy Services | Indian Large-Cap Information Technology |
+| `HDFCBANK.NS` | HDFC Bank | Indian Large-Cap Banking & Financials |
+| `INFY.NS` | Infosys | Indian Mid/Large-Cap Technology |
+| `GOLDBEES.NS` | Nippon India ETF Gold BeES | Domestic Gold / Inflation Hedge |
+| `AAPL` | Apple Inc. | US Technology & Growth |
+| `SPY` | SPDR S&P 500 ETF Trust | US Broad Equity Market Proxy |
+| `GC=F` | Gold Futures (COMEX) | International Commodity Hedge |
 
-Transaction costs are what most student projects skip — including them makes the simulation realistic and prevents the agent from over-trading.
-
----
-
-## 📈 Baselines
-
-| Strategy     | Description                                              |
-|--------------|----------------------------------------------------------|
-| Equal-Weight | 1/N allocation, rebalanced monthly                       |
-| Buy&Hold SPY | 100% S&P 500 ETF, no rebalancing                        |
-| Markowitz MPT| Monthly optimization on trailing 60-day covariance       |
-| Momentum Top-3 | Equal-weight the top-3 assets by prior month return   |
+**Data Partitioning**:
+- **Training**: 2018-01-01 to 2022-12-31 (In-sample policy training)
+- **Validation**: 2023-01-01 to 2023-12-31 (Hyperparameter calibration & early stopping)
+- **Testing**: 2024-01-01 to Present (Out-of-sample evaluation)
 
 ---
 
-## 📊 Evaluation Metrics
+## Reward Formulation
 
-| Metric           | Description                                        |
-|------------------|----------------------------------------------------|
-| Cumulative Return| Total % gain over test period                     |
-| Sharpe Ratio     | Annualised risk-adjusted return (rf = 5%)         |
-| Max Drawdown     | Largest peak-to-trough decline                    |
-| Calmar Ratio     | Ann. Return / |Max Drawdown| — hedge fund standard|
-| Turnover         | Mean daily L1 weight change                       |
+The step reward balances capital appreciation, downside risk, and turnover friction:
 
----
+$$R_t = \ln\left(\frac{V_t}{V_{t-1}}\right) - \lambda \sigma_t - \delta \cdot \text{TC}_t$$
 
-## 🚀 Setup & Run
-
-### 1. Install Python dependencies
-
-```bash
-cd portfolio
-pip install -r requirements.txt
-```
-
-### 2. Start the FastAPI backend
-
-```bash
-python api.py
-# Server starts at http://localhost:8000
-```
-
-### 3. Install and start the React frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-# Frontend at http://localhost:5173
-```
-
-### 4. Train (via UI or CLI)
-
-**Via UI:** Open `http://localhost:5173` → Train tab → Start Training
-
-**Via CLI:**
-```bash
-cd portfolio_rl
-python train.py --timesteps 500000 --device cpu
-```
-
-### 5. Evaluate
-
-**Via UI:** Evaluate tab → Run Evaluation
-
-**Via CLI:**
-```bash
-python train.py --eval-only
-```
+Where:
+- $V_t$: Portfolio net asset value at time step $t$.
+- $\sigma_t$: Rolling 5-day realized portfolio volatility ($\lambda = 0.10$).
+- $\text{TC}_t$: Transaction cost penalty defined as $\text{TC}_t = 0.001 \times \|\mathbf{w}_t - \mathbf{w}_{t-1}\|_1$ ($\delta = 1.0$), assuming a conservative 10 bps slippage and brokerage charge.
 
 ---
 
-## 📂 File Structure
+## Benchmark Comparison Strategies
+
+The trained PPO agent is benchmarked against four classical and quantitative baselines:
+
+1. **Equal-Weight (1/N)**: Uniform capital distribution rebalanced periodically.
+2. **Buy & Hold (SPY)**: Passive index tracking without rebalancing.
+3. **Markowitz Modern Portfolio Theory (MPT)**: Mean-variance quadratic optimization using rolling 60-day covariance estimates.
+4. **Momentum Top-3**: Monthly rotation into the top three assets by trailing return.
+
+---
+
+## Performance Evaluation Metrics
+
+- **Cumulative Return**: Total percentage capital growth over the test horizon.
+- **Sharpe Ratio**: Risk-adjusted excess return over the risk-free rate ($r_f = 5.0\%$).
+- **Maximum Drawdown (MDD)**: Peak-to-trough equity drop.
+- **Calmar Ratio**: Annualized return divided by absolute maximum drawdown.
+- **Turnover Rate**: Average daily L1 reallocation metric to measure execution friction.
+
+---
+
+## Repository Structure
 
 ```
-portfolio/
+.
 ├── portfolio_rl/
-│   ├── config.py         # All hyperparameters, paths, tickers
-│   ├── data_loader.py    # yfinance download, log-returns, train/val/test
-│   ├── environment.py    # PortfolioEnv (Gymnasium), step/reset/reward
-│   ├── model.py          # TransformerEncoder + ActorCritic
-│   ├── agent.py          # PPO loop, GAE, rollout buffer
-│   ├── baselines.py      # Equal-weight, B&H, Markowitz, Momentum
-│   ├── train.py          # CLI training entry point
-│   └── evaluate.py       # Metrics: Sharpe, drawdown, Calmar, turnover
-├── api.py                # FastAPI server — bridges Python ↔ React
+│   ├── config.py              # Hyperparameters, tickers, date splits
+│   ├── data_loader.py         # Yahoo Finance pipeline & return processing
+│   ├── environment.py         # Gymnasium PortfolioEnv environment
+│   ├── model.py               # Transformer state encoder + ActorCritic heads
+│   ├── agent.py               # PPO training loop with GAE buffer
+│   ├── baselines.py           # Equal-Weight, MPT, Momentum implementations
+│   ├── train.py               # CLI training and evaluation runner
+│   └── evaluate.py            # Financial performance metric calculators
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx                # Router + sidebar layout
-│   │   ├── api.js                 # Axios wrappers
-│   │   ├── pages/
-│   │   │   ├── Dashboard.jsx      # KPI cards + returns chart + table
-│   │   │   ├── Train.jsx          # Start/stop + live reward curve
-│   │   │   ├── Evaluate.jsx       # Metrics comparison
-│   │   │   └── WeightsView.jsx    # Stacked allocation chart
-│   │   ├── components/
-│   │   │   ├── MetricCard.jsx
-│   │   │   ├── ReturnsChart.jsx
-│   │   │   ├── WeightsChart.jsx
-│   │   │   ├── RewardChart.jsx
-│   │   │   ├── MetricsTable.jsx
-│   │   │   └── StatusBadge.jsx
-│   │   └── hooks/
-│   │       ├── useMetrics.js
-│   │       ├── usePortfolioValues.js
-│   │       └── useTrainingStatus.js
+│   │   ├── pages/             # Dashboard, Training, Evaluation, Weights views
+│   │   ├── components/        # Metrics cards, allocation & return charts
+│   │   └── api.js             # Axios client for FastAPI backend
 │   ├── package.json
 │   └── vite.config.js
+├── api.py                     # FastAPI REST server bridging model and UI
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## 🔑 What Makes This Novel (Viva Points)
+## Setup and Quickstart
 
-1. **Transformer state encoder** — treats the 20-day return history as a sequence, not a flat vector. Temporal attention weights reveal *which historical days* most influenced the allocation decision.
+### 1. Environment Installation
+```bash
+# Clone the repository
+git clone https://github.com/arjun-57/Finance-Portfolio-Management-Reinforcement-Learning-.git
+cd Finance-Portfolio-Management-Reinforcement-Learning-
 
-2. **Indian + global asset mix** — no existing open-source RL portfolio repo combines NSE stocks with SPY and Gold in this way.
+# Install Python requirements
+pip install -r requirements.txt
+```
 
-3. **Transaction cost in reward** — most implementations skip TC; our simulation is robust to over-trading.
+### 2. Training the PPO Agent
+```bash
+# Execute PPO training with Transformer encoder
+python portfolio_rl/train.py --timesteps 500000 --device cpu
 
-4. **Calmar ratio as primary metric** — measures risk-adjusted return the way hedge funds do, not just Sharpe.
+# Evaluate out-of-sample test performance
+python portfolio_rl/train.py --eval-only
+```
 
-5. **4 rigorous baselines** — including Momentum, which most papers omit.
+### 3. Launching the Web Interface
+```bash
+# Terminal 1: Start FastAPI Backend (http://localhost:8000)
+python api.py
+
+# Terminal 2: Start Vite Frontend (http://localhost:5173)
+cd frontend
+npm install
+npm run dev
+```
 
 ---
 
-## ⚙️ Key Hyperparameters
+## Hyperparameter Configuration
 
-| Parameter        | Value   | Rationale                                    |
-|------------------|---------|----------------------------------------------|
-| Window size      | 20 days | ~1 trading month of history                  |
-| d_model          | 64      | Compact encoder for fast convergence         |
-| Attention heads  | 2       | Captures 2 independent temporal patterns     |
-| PPO clip ε       | 0.2     | Standard; prevents large policy jumps        |
-| GAE λ            | 0.95    | High — trusts long-horizon advantage signals |
-| Entropy coef     | 0.01    | Light exploration bonus                      |
-| Total timesteps  | 500k    | Sufficient for convergence                   |
-| Transaction cost | 0.1%   | Realistic NSE/NYSE estimate                  |
+| Hyperparameter | Value | Description |
+|---|---|---|
+| Historical Lookback Window | 20 trading days | Trailing window of log returns |
+| Embedding Dimension ($d_{model}$) | 64 | Latent representation size |
+| Multi-Head Attention Heads | 2 | Parallel temporal attention mechanisms |
+| Transformer Layers | 2 | Depth of transformer encoder stack |
+| PPO Clipping Factor ($\epsilon$) | 0.20 | Policy probability ratio clipping bound |
+| GAE Parameter ($\lambda$) | 0.95 | Generalized Advantage Estimation horizon factor |
+| Entropy Coefficient | 0.01 | Policy entropy regularization for exploration |
+| Transaction Cost | 0.10% (10 bps) | Reallocation turnover penalty |
